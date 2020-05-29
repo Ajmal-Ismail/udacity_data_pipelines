@@ -8,29 +8,27 @@ class DataQualityOperator(BaseOperator):
     @apply_defaults
     def __init__(self,
                  redshift_conn_id='',
-                 table='',
-                 count_query='',
-                 expected_count='',
+                 tests={},
                  *args, **kwargs):
         super(DataQualityOperator, self).__init__(*args, **kwargs)
         self.redshift_conn_id = redshift_conn_id
-        self.count_query = count_query
-        self.expected_count = expected_count
+        self.tests = tests
         
     def execute(self, context):
         self.log.info('Connect Redshift')
         redshift = PostgresHook(self.redshift_conn_id)
         
-        self.log.info('Run test count query.')
-        result = redshift.get_records(self.count_query)
-        
-        self.log.info('Sanity checks on returned result set.')
-        if len(result) == 0 or len(result[0]) == 0:
-            raise ValueError('No result returned by test query. Data quality test failed.')
-        count = result[0][0]
-        
-        self.log.info('Check expected results.')
-        if count != self.expected_count:
-            raise ValueError('Returned count: {}. Data quality test failed.'.format(count))
+        for test in self.tests:
+            self.log.info('Run test query.')
+            result = redshift.get_records(test['query'])
+
+            self.log.info('Sanity checks on returned result set.')
+            if len(result) == 0 or len(result[0]) == 0:
+                raise ValueError('No result returned by test query. Data quality test failed.')
+            count = result[0][0]
+
+            self.log.info('Check expected results.')
+            if count != test['expected_result']:
+                raise ValueError('Returned count: {}. Data quality test failed.'.format(count))
         self.log.info('Data quality checks passed.')
         
